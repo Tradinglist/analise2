@@ -75,10 +75,18 @@ def main():
         return
 
     # Calcular indicadores técnicos
-    macd = MACD(close=df['Close'])
-    df['macd'] = macd.macd()
-    df['macd_signal'] = macd.macd_signal()
-    df['macd_diff'] = macd.macd_diff()
+    df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
+    df.dropna(subset=['Close'], inplace=True)  # Ensure no missing data
+
+    # Iniciar e calcular o MACD com parâmetros padrão
+    try:
+        macd = MACD(close=df['Close'], window_slow=26, window_fast=12, window_sign=9)
+        df['macd'] = macd.macd()
+        df['macd_signal'] = macd.macd_signal()
+        df['macd_diff'] = macd.macd_diff()
+    except Exception as e:
+        logging.error(f"Erro ao calcular MACD: {e}")
+        return
 
     rsi = RSIIndicator(close=df['Close'], window=14)
     df['rsi'] = rsi.rsi()
