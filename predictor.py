@@ -6,9 +6,9 @@ from ta.momentum import RSIIndicator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-import time
 import logging
 import os
+import streamlit as st
 
 # --- Configuração de Arquivo ---
 PREDICTION_LOG_FILE = "prediction_log.csv"
@@ -20,15 +20,17 @@ logging.basicConfig(filename="prediction.log", level=logging.INFO,
 
 def get_yfinance_data(symbol="BTC-EUR", period="6mo", interval="1h"):
     try:
+        st.write(f"Obtendo dados para o símbolo {symbol}...")
         df = yf.download(symbol, period=period, interval=interval)
         if df.empty:
-            print("Erro: Dados vazios obtidos de Yahoo Finance.")
+            st.write("Erro: Dados vazios obtidos de Yahoo Finance.")
             logging.error("Erro: Dados vazios obtidos de Yahoo Finance.")
             return None
         df.dropna(inplace=True)
+        st.write(f"Dados obtidos com sucesso. Número de linhas: {len(df)}")
         return df
     except Exception as e:
-        print(f"Erro ao obter dados do Yahoo Finance: {e}")
+        st.write(f"Erro ao obter dados do Yahoo Finance: {e}")
         logging.error(f"Erro ao obter dados do Yahoo Finance: {e}")
         return None
 
@@ -66,34 +68,35 @@ def retrain_model(df, features, target):
         model.fit(X_train, y_train)
         accuracy = accuracy_score(y_test, model.predict(X_test))
         logging.info(f"📊 Acurácia do modelo: {accuracy:.2%}")
-
+        st.write(f"📊 Acurácia do modelo: {accuracy:.2%}")
         return model
     except Exception as e:
-        print(f"Erro ao treinar o modelo: {e}")
+        st.write(f"Erro ao treinar o modelo: {e}")
         logging.error(f"Erro ao treinar o modelo: {e}")
         return None
 
 def main():
-    print("Iniciando o processo...")
+    st.title("Previsão de Preço BTC/EUR com Machine Learning")
+    
     # Obtenção de dados históricos
     df = get_yfinance_data()
     if df is None:
+        st.write("Erro: Não foi possível obter dados.")
         return
 
     # Verificação do tipo de dados
-    print(f"Tipo de df: {type(df)}")
-    print(f"Primeiras linhas do df:\n{df.head()}")
-
-    # Verificar o tipo da coluna 'Close'
-    print(f"Tipo de df['Close']: {type(df['Close'])}")
+    st.write(f"Tipo de df: {type(df)}")
+    st.write(f"Primeiras linhas do df:")
+    st.write(df.head())
 
     # Convertendo a coluna 'Close' para valores numéricos
     try:
         df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
         df.dropna(subset=['Close'], inplace=True)
-        print(f"Dados da coluna 'Close' após conversão:\n{df['Close'].head()}")
+        st.write(f"Dados da coluna 'Close' após conversão:")
+        st.write(df['Close'].head())
     except Exception as e:
-        print(f"Erro ao converter 'Close' para numérico: {e}")
+        st.write(f"Erro ao converter 'Close' para numérico: {e}")
         logging.error(f"Erro ao converter 'Close' para numérico: {e}")
         return
 
@@ -103,9 +106,9 @@ def main():
         df['macd'] = macd.macd()
         df['macd_signal'] = macd.macd_signal()
         df['macd_diff'] = macd.macd_diff()
-        print(f"MACD calculado com sucesso!")
+        st.write(f"MACD calculado com sucesso!")
     except Exception as e:
-        print(f"Erro ao calcular MACD: {e}")
+        st.write(f"Erro ao calcular MACD: {e}")
         logging.error(f"Erro ao calcular MACD: {e}")
         return
 
@@ -124,6 +127,7 @@ def main():
     # Re-treinamento do modelo
     model = retrain_model(df, features, target)
     if model is None:
+        st.write("Erro: Não foi possível treinar o modelo.")
         return
 
     # Predição para o próximo período
@@ -135,7 +139,7 @@ def main():
 
     direction = "📈 SUBIR" if prediction == 1 else "📉 CAIR"
     logging.info(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
-    print(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
+    st.write(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
 
     # Registo da previsão
     log_df = load_prediction_log()
@@ -150,28 +154,30 @@ def main():
     save_prediction_log(log_df)
 
     # Gráfico
-    plt.figure(figsize=(14, 8))
-    plt.subplot(2,1,1)
-    plt.plot(df['Close'][-200:], label='Preço BTC/EUR', color='blue')
-    plt.title("Preço BTC/EUR (Últimas 200h)")
-    plt.ylabel("€")
-    plt.legend()
+    try:
+        fig, ax = plt.subplots(2, 1, figsize=(14, 8))
 
-    plt.subplot(2,1,2)
-    plt.plot(df['macd_signal'][-200:], label='MACD Signal', color='orange')
-    plt.axhline(0, color='gray', linestyle='--', linewidth=1)
-    buy_signals = df[(df['macd_signal'].shift(1) < 0) & (df['macd_signal'] > 0)]
-    sell_signals = df[(df['macd_signal'].shift(1) > 0) & (df['macd_signal'] < 0)]
-    plt.scatter(buy_signals.index, buy_signals['macd_signal'], marker='^', color='green', label='📈 Buy Signal')
-    plt.scatter(sell_signals.index, sell_signals['macd_signal'], marker='v', color='red', label='📉 Sell Signal')
-    plt.title("MACD Signal com Sinais de Compra/Venda")
-    plt.ylabel("MACD Signal")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(GRAPH_FILE)
-    plt.close()
+        ax[0].plot(df['Close'][-200:], label='Preço BTC/EUR', color='blue')
+        ax[0].set_title("Preço BTC/EUR (Últimas 200h)")
+        ax[0].set_ylabel("€")
+        ax[0].legend()
+
+        ax[1].plot(df['macd_signal'][-200:], label='MACD Signal', color='orange')
+        ax[1].axhline(0, color='gray', linestyle='--', linewidth=1)
+        buy_signals = df[(df['macd_signal'].shift(1) < 0) & (df['macd_signal'] > 0)]
+        sell_signals = df[(df['macd_signal'].shift(1) > 0) & (df['macd_signal'] < 0)]
+        ax[1].scatter(buy_signals.index, buy_signals['macd_signal'], marker='^', color='green', label='📈 Buy Signal')
+        ax[1].scatter(sell_signals.index, sell_signals['macd_signal'], marker='v', color='red', label='📉 Sell Signal')
+        ax[1].set_title("MACD Signal com Sinais de Compra/Venda")
+        ax[1].set_ylabel("MACD Signal")
+        ax[1].legend()
+
+        plt.tight_layout()
+        st.pyplot(fig)
+        st.write(f"Gráfico salvo em {GRAPH_FILE}")
+    except Exception as e:
+        st.write(f"Erro ao gerar gráfico: {e}")
+        logging.error(f"Erro ao gerar gráfico: {e}")
 
 if __name__ == "__main__":
-    while True:
-        main()
-        time.sleep(3600)  # Espera de 1 hora entre execuções
+    main()
