@@ -6,7 +6,6 @@ from ta.momentum import RSIIndicator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import StandardScaler
 import time
 import logging
 import os
@@ -22,6 +21,9 @@ logging.basicConfig(filename="prediction.log", level=logging.INFO,
 def get_yfinance_data(symbol="BTC-EUR", period="6mo", interval="1h"):
     try:
         df = yf.download(symbol, period=period, interval=interval)
+        if df.empty:
+            logging.error("Erro: Dados vazios obtidos de Yahoo Finance.")
+            return None
         df.dropna(inplace=True)
         return df
     except Exception as e:
@@ -74,9 +76,20 @@ def main():
     if df is None:
         return
 
-    # Calcular indicadores técnicos
-    df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
-    df.dropna(subset=['Close'], inplace=True)  # Ensure no missing data
+    # Verificação do tipo de dados
+    print(f"Tipo de df: {type(df)}")
+    print(f"Primeiras linhas do df:\n{df.head()}")
+
+    # Verificar o tipo da coluna 'Close'
+    print(f"Tipo de df['Close']: {type(df['Close'])}")
+
+    # Convertendo a coluna 'Close' para valores numéricos
+    try:
+        df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
+        df.dropna(subset=['Close'], inplace=True)
+    except Exception as e:
+        logging.error(f"Erro ao converter 'Close' para numérico: {e}")
+        return
 
     # Iniciar e calcular o MACD com parâmetros padrão
     try:
@@ -107,10 +120,7 @@ def main():
 
     # Predição para o próximo período
     current_features = df[features].iloc[-1].values.reshape(1, -1)
-    scaler = StandardScaler()
-    current_features_scaled = scaler.fit_transform(current_features)
-
-    prediction = model.predict(current_features_scaled)[0]
+    prediction = model.predict(current_features)[0]
     current_price = df['Close'].iloc[-1]
     predicted_price = current_price * (1.01 if prediction == 1 else 0.99)
     prediction_time = df.index[-1] + pd.Timedelta(hours=1)
