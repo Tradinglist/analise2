@@ -6,7 +6,6 @@ from ta.momentum import RSIIndicator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-import logging
 import os
 import streamlit as st
 
@@ -15,8 +14,7 @@ PREDICTION_LOG_FILE = "prediction_log.csv"
 GRAPH_FILE = "grafico.png"
 
 # Configuração de Logs
-logging.basicConfig(filename="prediction.log", level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+st.set_page_config(page_title="BTC/EUR Previsão com Machine Learning")
 
 def get_yfinance_data(symbol="BTC-EUR", period="6mo", interval="1h"):
     try:
@@ -24,14 +22,12 @@ def get_yfinance_data(symbol="BTC-EUR", period="6mo", interval="1h"):
         df = yf.download(symbol, period=period, interval=interval)
         if df.empty:
             st.write("Erro: Dados vazios obtidos de Yahoo Finance.")
-            logging.error("Erro: Dados vazios obtidos de Yahoo Finance.")
             return None
         df.dropna(inplace=True)
         st.write(f"Dados obtidos com sucesso. Número de linhas: {len(df)}")
         return df
     except Exception as e:
         st.write(f"Erro ao obter dados do Yahoo Finance: {e}")
-        logging.error(f"Erro ao obter dados do Yahoo Finance: {e}")
         return None
 
 def load_prediction_log():
@@ -43,21 +39,6 @@ def load_prediction_log():
 def save_prediction_log(log_df):
     log_df.to_csv(PREDICTION_LOG_FILE, index=False)
 
-def check_past_predictions(df, log_df):
-    now = df.index[-1]
-    updated_log = log_df.copy()
-    for i, row in log_df.iterrows():
-        if pd.isna(row["actual_price"]) and now >= row["prediction_time"]:
-            try:
-                actual = df.loc[row["prediction_time"]]["Close"]
-                error = abs(actual - row["predicted_price"]) / row["predicted_price"] * 100
-                updated_log.at[i, "actual_price"] = actual
-                updated_log.at[i, "error_percent"] = error
-                logging.info(f"✔️ Atualizado: previsão para {row['prediction_time']} -> erro: {error:.2f}%")
-            except KeyError:
-                continue
-    return updated_log
-
 def retrain_model(df, features, target):
     try:
         X = df[features]
@@ -67,12 +48,10 @@ def retrain_model(df, features, target):
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_train, y_train)
         accuracy = accuracy_score(y_test, model.predict(X_test))
-        logging.info(f"📊 Acurácia do modelo: {accuracy:.2%}")
         st.write(f"📊 Acurácia do modelo: {accuracy:.2%}")
         return model
     except Exception as e:
         st.write(f"Erro ao treinar o modelo: {e}")
-        logging.error(f"Erro ao treinar o modelo: {e}")
         return None
 
 def main():
@@ -97,7 +76,6 @@ def main():
         st.write(df['Close'].head())
     except Exception as e:
         st.write(f"Erro ao converter 'Close' para numérico: {e}")
-        logging.error(f"Erro ao converter 'Close' para numérico: {e}")
         return
 
     # Iniciar e calcular o MACD com parâmetros padrão
@@ -109,7 +87,6 @@ def main():
         st.write(f"MACD calculado com sucesso!")
     except Exception as e:
         st.write(f"Erro ao calcular MACD: {e}")
-        logging.error(f"Erro ao calcular MACD: {e}")
         return
 
     rsi = RSIIndicator(close=df['Close'], window=14)
@@ -138,12 +115,10 @@ def main():
     prediction_time = df.index[-1] + pd.Timedelta(hours=1)
 
     direction = "📈 SUBIR" if prediction == 1 else "📉 CAIR"
-    logging.info(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
     st.write(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
 
     # Registo da previsão
     log_df = load_prediction_log()
-    log_df = check_past_predictions(df, log_df)
     new_row = pd.DataFrame([{
         "prediction_time": prediction_time,
         "predicted_price": predicted_price,
@@ -174,10 +149,8 @@ def main():
 
         plt.tight_layout()
         st.pyplot(fig)
-        st.write(f"Gráfico salvo em {GRAPH_FILE}")
     except Exception as e:
         st.write(f"Erro ao gerar gráfico: {e}")
-        logging.error(f"Erro ao gerar gráfico: {e}")
 
 if __name__ == "__main__":
     main()
