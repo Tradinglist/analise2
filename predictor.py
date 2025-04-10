@@ -22,11 +22,13 @@ def get_yfinance_data(symbol="BTC-EUR", period="6mo", interval="1h"):
     try:
         df = yf.download(symbol, period=period, interval=interval)
         if df.empty:
+            print("Erro: Dados vazios obtidos de Yahoo Finance.")
             logging.error("Erro: Dados vazios obtidos de Yahoo Finance.")
             return None
         df.dropna(inplace=True)
         return df
     except Exception as e:
+        print(f"Erro ao obter dados do Yahoo Finance: {e}")
         logging.error(f"Erro ao obter dados do Yahoo Finance: {e}")
         return None
 
@@ -67,10 +69,12 @@ def retrain_model(df, features, target):
 
         return model
     except Exception as e:
+        print(f"Erro ao treinar o modelo: {e}")
         logging.error(f"Erro ao treinar o modelo: {e}")
         return None
 
 def main():
+    print("Iniciando o processo...")
     # Obtenção de dados históricos
     df = get_yfinance_data()
     if df is None:
@@ -87,7 +91,9 @@ def main():
     try:
         df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
         df.dropna(subset=['Close'], inplace=True)
+        print(f"Dados da coluna 'Close' após conversão:\n{df['Close'].head()}")
     except Exception as e:
+        print(f"Erro ao converter 'Close' para numérico: {e}")
         logging.error(f"Erro ao converter 'Close' para numérico: {e}")
         return
 
@@ -97,7 +103,9 @@ def main():
         df['macd'] = macd.macd()
         df['macd_signal'] = macd.macd_signal()
         df['macd_diff'] = macd.macd_diff()
+        print(f"MACD calculado com sucesso!")
     except Exception as e:
+        print(f"Erro ao calcular MACD: {e}")
         logging.error(f"Erro ao calcular MACD: {e}")
         return
 
@@ -127,6 +135,7 @@ def main():
 
     direction = "📈 SUBIR" if prediction == 1 else "📉 CAIR"
     logging.info(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
+    print(f"Previsão: {direction}, Estimado: €{predicted_price:.2f}, Hora: {prediction_time}")
 
     # Registo da previsão
     log_df = load_prediction_log()
